@@ -33,13 +33,19 @@ export const ignoreInvalidAction = () => next => action => {
   const ignoreRace = action[IGNORE_RACE]
   const notIgnore = action[NOT_IGNORE]
 
+  // APP初始化
+  if (!prevPathname) {
+    prevPathname = payload && payload.pathname
+    return next(action)
+  }
+
   // 当路由改变时，ignore所有waiting中的action
   if (type === LOCATION_CHANGE && prevPathname !== payload.pathname) {
     prevPathname = payload.pathname
     Object.getOwnPropertyNames(ignoreActionsCache).forEach(id => {
       ignoreActionsCache[id] = ignoreActionsCache[id] === 'waiting' ? 'ignore' : ignoreActionsCache[id]
     })
-    return
+    return next(action)
   }
 
   // 排除声明not ignore、没有ignoreId标识的action
