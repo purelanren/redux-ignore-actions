@@ -11,6 +11,7 @@ import UUID from 'uuid-js'
 export const IGNORE_ID = Symbol('ignore id')
 export const IGNORE_RACE = Symbol('ignore race')
 export const NOT_IGNORE = Symbol('not ignore')
+export const IGNORE_ACTION_TYPE = '@@ignoreActions/IGNORE_ACTION_TYPE'
 
 // 删除定制属性
 const reduceAction = function reduceAction (action) {
@@ -27,7 +28,11 @@ let lastRaceActions = {}
 let prevPathname
 
 // 当路由改变时忽略处理中的action
-export const ignoreInvalidAction = () => next => action => {
+const createIgnoreAction = (originAction) => ({
+  type: IGNORE_ACTION_TYPE,
+  originAction
+})
+export const ignoreInvalidAction = ({ dispatch }) => next => action => {
   const { type, api, payload } = action
   const ignoreId = action[IGNORE_ID]
   const ignoreRace = action[IGNORE_RACE]
@@ -43,7 +48,10 @@ export const ignoreInvalidAction = () => next => action => {
   if (type === LOCATION_CHANGE && prevPathname !== payload.pathname) {
     prevPathname = payload.pathname
     Object.getOwnPropertyNames(ignoreActionsCache).forEach(id => {
-      ignoreActionsCache[id] = ignoreActionsCache[id] === 'waiting' ? 'ignore' : ignoreActionsCache[id]
+      if (ignoreActionsCache[id].status === 'waiting') {
+        ignoreActionsCache[id].status = 'ignore'
+        dispatch(createIgnoreAction(ignoreActionsCache[id].originAction))
+      }
     })
     return next(action)
   }
@@ -54,14 +62,17 @@ export const ignoreInvalidAction = () => next => action => {
   }
 
   // ignore action
-  if (ignoreActionsCache[ignoreId] === 'ignore') {
+  if (ignoreActionsCache[ignoreId] && ignoreActionsCache[ignoreId].status === 'ignore') {
     delete ignoreActionsCache[ignoreId]
     return
   }
 
-  // 初次进入的action标记为waiting，否则视为已有返回值并删除cache内的记录
+  // 初次进入的action标记为waiting，否则视为返回值并删除cache内的记录
   if (typeof ignoreActionsCache[ignoreId] === 'undefined') {
-    ignoreActionsCache[ignoreId] = 'waiting'
+    ignoreActionsCache[ignoreId] = {
+      status: 'waiting',
+      originAction: Object.assign({}, action)
+    }
   } else {
     delete ignoreActionsCache[ignoreId]
   }
@@ -74,7 +85,11 @@ export const ignoreInvalidAction = () => next => action => {
 
     // 发现记录内存在相同标识的action等待响应，则忽略之前action的响应
     if (lastRaceActions[actionType].type === type) {
-      ignoreActionsCache[lastRaceActions[actionType].ignoreId] = 'ignore'
+      const origin = ignoreActionsCache[lastRaceActions[actionType].ignoreId]
+      if (origin) {
+        origin.status = 'ignore'
+        dispatch(createIgnoreAction(origin.originAction))
+      }
     }
 
     // 记录内的action完成响应，清除该记录
