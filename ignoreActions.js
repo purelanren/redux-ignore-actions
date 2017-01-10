@@ -86,19 +86,17 @@ export const ignoreInvalidAction = ({ dispatch }) => next => action => {
     // 发现记录内存在相同标识的action等待响应，则忽略之前action的响应
     if (lastRaceActions[actionType].type === type) {
       const origin = ignoreActionsCache[lastRaceActions[actionType].ignoreId]
-      if (origin) {
+      if (origin && origin.status !== 'ignore') {
         origin.status = 'ignore'
         dispatch(createIgnoreAction(origin.originAction))
       }
     }
 
-    // 记录内的action完成响应，清除该记录
     if (lastRaceActions[actionType].ignoreId === ignoreId) {
+      // 记录内的action完成响应，清除该记录
       delete lastRaceActions[actionType]
-    }
-
-    // 添加、更新等待响应的记录
-    if (lastRaceActions[actionType]) {
+    } else {
+      // 添加、更新等待响应的记录
       lastRaceActions[actionType] = { ignoreId, type }
     }
   }
